@@ -1,1 +1,1 @@
-Sample, skeleton module for use with the ZF2 MVC layer.
+A module that will add Zend Server a continuous integration, jenkins-like features.
