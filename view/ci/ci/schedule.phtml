@@ -1,0 +1,657 @@
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script>
+$.noConflict();
+</script>
+<link href="/ZendServer/css/recurringJob.css?v=8.0.092241" media="screen" rel="stylesheet" type="text/css">
+<div class="container" id="main-container">
+      
+<script type="text/javascript">
+
+var ruleExists = false;
+var rule;
+var sslAvailable = false;
+
+function createRuleAction(action, options) {
+	createRule();
+}
+
+window.addEvent("load", function() {
+	document.addEvent('entry-changed', function(){
+		$('recurring-jobs_grid_create').set('disabled','');
+		window.onbeforeunload = function(){
+			return "Your changes have not been saved yet.";
+    	};	
+	});
+});
+
+window.addEvent("domready", function() {
+    
+    $('rule-url').addEvent('input', function (event) {
+    	toggleScheduleSslValidation(event.target)
+    });
+
+    toggleScheduleSslValidation($('rule-url'));
+});
+
+function toggleScheduleSslValidation(urlbox) {
+	if (urlbox.get('value').test(/^https/)) {
+		if (sslAvailable) {
+			/// table rows can't be just "show()"n, the correct display style is needed
+	        $('scheduleSslValidationSelectBox').setStyle('display', 'table-row');
+	    } else {
+	        $('scheduleSslValidationNotAvailableBox').setStyle('display', 'table-row');
+	    }
+	} else {
+    	$('scheduleSslValidationSelectBox').hide();
+    	$('scheduleSslValidationNotAvailableBox').hide();
+	}
+}
+
+function toggleScheduleType() {
+    var selectedType = $('schedule-type').getSelected().get('value');
+	$('schedule-type').getElements('option').each(function(option) {
+	    if (selectedType == option.get('value')) {
+	    	$(eval("'" + option.get('value') + "'")).setStyle('display', '');
+	    } else {
+	    	$(eval("'" + option.get('value') + "'")).setStyle('display', 'none');
+	    }
+	});
+}
+
+function toggleScheduleEveryOptions() {
+	var selectedElement = $$('input[name=scheduleEvery]:checked').pick();
+	$$('input[name=scheduleEvery] + input').set('disabled', 'disabled');
+	$$('input[name=scheduleEvery]:checked + input').removeProperty('disabled');
+}
+
+/* Create/Update Rule */
+function createRule() {
+    var ruleUrl = $('rule-url').value.trim();
+    if (ruleUrl.length == 0 || !validateUrl(ruleUrl)) {
+        document.fireEvent('toastAlert', {'message': 'Please specify a valid URL for the recurring job'});
+        return;
+    }
+
+    var ruleName = $('rule-name').value;
+    if (ruleName.length == 0) {
+        document.fireEvent('toastAlert', {'message': 'Please specify the name of the recurring job'});
+        return;
+    }
+    var ruleSchedule = getRuleSchedule();
+    if (ruleSchedule == null) {
+        return;
+    }
+
+    if ($('rule-url').get('value').test(/^https/)) {
+	    ruleSchedule.validate_ssl = $('scheduleSslValidationSelect').get('value');
+    }
+    ruleSchedule.name = ruleName;
+
+    var param = '';
+    if (ruleExists) {
+        params = {'ruleId': rule.responseData.rulesInfo.rule.id, 'vars': [], 'options': ruleSchedule};
+        url = '/ZendServer/Api/jobqueueSaveRule';
+        param = 'preaction=updated';
+    } else {
+        params = {'url': ruleUrl, 'vars': [], 'options': ruleSchedule};
+        url = '/ZendServer/Api/jobqueueSaveRule';
+        param = 'preaction=created';
+    }
+
+    $('recurring-jobs_grid_create').spin();
+    
+    var request = new Request.WebAPI({
+		url:url, 
+		data:params, 
+		onSuccess: function(response) {
+			window.onbeforeunload=null; //remove unsaved warning message
+			document.fireEvent('toastNotification', {'message': 'Job saved successfully'});
+			Function.from(function(){
+			    location.href = '/ZendServer/Ci/project?jobId=<?php echo $this->jobId; ?>&ruleId=' + response.responseData.rulesInfo.rule.id;
+			}).delay(3000);
+		},
+		onFailure: function(response) {
+			var decoded = this.decodeResponse(response);
+			document.fireEvent('toastAlert', {'message': decoded.errorData.errorMessage});
+		}
+		
+	}).post();
+}
+
+function validateUrl(url) {
+    return url.test(/^https?:\/\/[^\/].*/);
+}
+
+function getRuleSchedule() {
+    var scheduleType = $('schedule-type').value;
+    var schedule = '';
+    var interval = '';
+    switch (scheduleType) {
+        case 'schedule-every':
+            if ($$('input[name=scheduleEvery]:checked').length == 0) {
+                document.fireEvent('toastAlert', {'message': 'Please specify an hours/minutes value'});
+                return;
+            }
+
+            if ($$('input[name=scheduleEvery]:checked')[0].get('value') == 'schedule-every-days') {
+				if (isNaN($('schedule-every-days').value)) {
+					document.fireEvent('toastAlert', {'message': 'Entered value "' + $('schedule-every-days').value + '" is an incorrect value. Enter a number in the days field'});
+	                return;
+				}
+                if (! validateDays(parseInt($('schedule-every-days').value))) {
+                    return;
+                }
+                interval = 'D ' + parseInt($('schedule-every-days').value);                
+            } else if ($$('input[name=scheduleEvery]:checked')[0].get('value') == 'schedule-every-hours') {
+				if (isNaN($('schedule-every-hours').value)) {
+					document.fireEvent('toastAlert', {'message': 'Entered value "' + $('schedule-every-hours').value + '" is an incorrect value. Enter a number in the hours field'});
+	                return;
+				}
+                if (! validateHours(parseInt($('schedule-every-hours').value))) {
+                    return;
+                }
+                interval = 'H ' + parseInt($('schedule-every-hours').value);
+            } else {
+            	if (isNaN($('schedule-every-minutes').value)) {
+					document.fireEvent('toastAlert', {'message': 'Entered value "' + $('schedule-every-minutes').value + '" is an incorrect value. Enter a number in the minutes field'});
+	                return;
+				}
+                if (! validateMinutes(parseInt($('schedule-every-minutes').value))) {
+                    return;
+                }
+                interval = 'M ' + parseInt($('schedule-every-minutes').value);
+            }
+            break;
+        case 'schedule-hourly':
+        	if (isNaN($('schedule-hourly-minute').value)) {
+        		document.fireEvent('toastAlert', {'message': 'Entered value "' + $('schedule-hourly-minute').value + '" is an incorrect value. Enter a number'});
+                return;
+			}
+            if (! validateMinutes(parseInt($('schedule-hourly-minute').value))) {// hourly: at {schedule-hourly-minute} minutess after the hour
+                return;
+            }
+            schedule = parseInt($('schedule-hourly-minute').value);
+            break;
+        case 'schedule-daily':
+            schedule = parseInt($('schedule-daily-time-minute').value) + ' ' +  parseInt($('schedule-daily-time-hour').value);
+            break;
+        case 'schedule-weekly':
+            if ($$('input[name=scheduleWeeklyDay]:checked').length == 0) {
+                document.fireEvent('toastAlert', {'message': 'Please specify a day'});
+                return;
+            }
+            var days = new Array();
+            Array.each($$('input[name=scheduleWeeklyDay]:checked'), function (element) {
+                days.push(element.value);
+            });
+            schedule = parseInt($('schedule-weekly-time-minute').value) + ' ' +  parseInt($('schedule-weekly-time-hour').value) + ' * * ' + days.join(',');
+            break;
+        case 'schedule-monthly':
+            schedule = parseInt($('schedule-monthly-time-minute').value) + ' ' +  parseInt($('schedule-monthly-time-hour').value) + ' ' + $('schedule-monthly-day').value;
+            break;
+    }
+    if (schedule != '') {
+        return {'schedule' : schedule};
+	} else if(interval != '') {
+		return {'interval' : interval};
+	}
+    
+    return null;
+}
+
+function validateDays(value) {
+    if (! value) {
+        document.fireEvent('toastAlert', {'message': 'Please specify an days value'});
+        return false;
+    }
+    if (value < 1 || value > 99) {
+        document.fireEvent('toastAlert', {'message': 'Please specify valid days value (1-99)'});
+        return false;
+    }
+    return true;
+}
+
+function validateHours(value) {
+    if (! value) {
+        document.fireEvent('toastAlert', {'message': 'Please specify an hours value'});
+        return false;
+    }
+    if (value < 1 || value > 23) {
+        document.fireEvent('toastAlert', {'message': 'Please specify valid hours value (1-23)'});
+        return false;
+    }
+    return true;
+}
+
+function validateMinutes(value) {
+    if (! value) {
+        document.fireEvent('toastAlert', {'message': 'Please specify a minutes value'});
+        return false;
+    }
+    if (value < 1 || value > 59) {
+        document.fireEvent('toastAlert', {'message': 'Please specify valid minutes value (1-59)'});
+        return false;
+    }
+    return true;
+}
+
+</script>
+<div id="bread-wrp">
+	<div id="bread">
+		<ul>
+			<li>Applications</li>
+			<li><a href="/ZendServer/RecurringJobs/">Job Rules</a></li>
+			<li>Create New Recurring Job</li>
+		</ul>
+	</div>
+</div>
+<div id="recurring-jobs-grid-actions-bar" class="grid-action-bar">
+<button id="recurring-jobs_grid_create" onclick="createRuleAction();" title="Create the new Recurring Job">Save</button>
+<button id="recurring-jobs_grid_cancel" onclick="location.href='Index'">Close</button>
+</div>
+<table id="scheduling-rule-form">
+    <tbody>
+            <tr>
+				<td colspan="2">
+					<h2 class="schedulingRuleFormTitle">Create a New Recurring Job</h2>
+					<p>A recurring job occurs periodically according to the scheduling rule provided below.</p>
+				</td>
+			</tr>
+			<tr>
+				<th class="schedulingRuleDetail">Name</th>
+				<td>
+					<input style="width: 400px;" onchange="document.fireEvent('entry-changed');" maxlength="" name="ruleName" type="text" id="rule-name" dir="ltr" value="<?php echo $this->projectData['jobname'];?>">
+				</td>
+			</tr>
+			<tr>
+				<th class="schedulingRuleDetail">URL</th>
+				<td>
+					<input style="width: 400px;" onchange="document.fireEvent('entry-changed');" maxlength="" name="ruleUrl" type="text" id="rule-url" dir="ltr" value="<?php echo $this->jobTrigger; ?>">
+				</td>
+			</tr>
+			
+			<tr id="scheduleSslValidationNotAvailableBox" class="scheduleSslValidation hidden">
+				<th class="schedulingRuleDetail">
+				</th>
+				<td>
+					<label class="experimental">SSL for Job Queue is an experimental feature, to enable it <a href="/ZendServer/ZendComponents/#search=zend_jobqueue.enable_https&amp;daemon-tab=1">click here</a></label>
+				</td>
+			</tr>
+			
+			<tr id="scheduleSslValidationSelectBox" class="scheduleSslValidation hidden">
+				<th class="schedulingRuleDetail">
+				Validate SSL				</th>
+				<td>
+					<select id="scheduleSslValidationSelect" onchange="document.fireEvent('entry-changed');">
+											<option value="VALIDATE_SSL_INHERIT">Keep global behavior (Do not validate SSL certificate)</option>
+											<option value="VALIDATE_SSL_STRICT">Always validate server SSL certificate</option>
+											<option value="VALIDATE_SSL_ACCEPT">Do not validate server SSL certificate</option>
+										</select>
+					<label class="experimental">SSL for Job Queue is an experimental feature</label>
+				</td>
+			</tr>
+			
+			<tr>
+				<td colspan="2">
+					<h2 class="schedulingRuleFormTitle subtitle">Schedule</h2>
+				</td>
+			</tr>
+			<tr>
+				<th class="schedulingRuleDetail">Execute Job</th>
+				<td>
+					<select id="schedule-type" name="scheduleType" onchange="toggleScheduleType();document.fireEvent('entry-changed');">
+						<option value="schedule-every" selected="selected">Every</option>
+						<option value="schedule-hourly">Hourly</option>
+						<option value="schedule-daily">Daily</option>
+						<option value="schedule-weekly">Weekly</option>
+						<option value="schedule-monthly">Monthly</option>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<td>&nbsp;</td>
+				<td>
+					<div id="schedule-stack">
+    					<div id="schedule-every" class="schedulingEveryDiv">
+    						<div class="scheduleEveryMargin10">
+    						<input onchange="document.fireEvent('entry-changed');" type="radio" name="scheduleEvery" id="schedule-every-days-opt" value="schedule-every-days" onclick="toggleScheduleEveryOptions()">
+    						<input onchange="document.fireEvent('entry-changed');" style="width:20px" maxlength="2" value="" name="scheduleEveryDays" type="text" id="schedule-every-days" disabled="disabled">
+    						days    						</div>
+    						<div class="scheduleEveryMargin10">
+    						<input onchange="document.fireEvent('entry-changed');" type="radio" name="scheduleEvery" checked="checked" id="schedule-every-hours-opt" value="schedule-every-hours" onclick="toggleScheduleEveryOptions()">
+    						<input onchange="document.fireEvent('entry-changed');" style="width:20px" maxlength="2" value="" name="scheduleEveryHours" type="text" id="schedule-every-hours">
+    						hours    						</div>
+    						<div class="scheduleEveryMargin10">
+    						<input onchange="document.fireEvent('entry-changed');" type="radio" name="scheduleEvery" id="schedule-every-minutes-opt" value="schedule-every-minutes" onclick="toggleScheduleEveryOptions()">
+    						<input onchange="document.fireEvent('entry-changed');" style="width:20px" maxlength="2" value="" name="scheduleEveryMinutes" type="text" id="schedule-every-minutes" disabled="disabled">
+    						minutes    						</div>
+    					</div>
+    					<div id="schedule-hourly" class="scheduleHourly" style="display: none;">
+    						at <input onchange="document.fireEvent('entry-changed');" maxlength="2" style="width:20px" value="" name="scheduleHourlyMinute" type="text" id="schedule-hourly-minute">
+    						minutes after the hour    					</div>
+    					<div id="schedule-daily" class="schedulingEveryDiv" style="display: none;">
+							<div>at  
+							<select onchange="document.fireEvent('entry-changed');" id="schedule-daily-time-hour">
+														    <option value="00" selected="">00</option>
+														    <option value="01">01</option>
+														    <option value="02">02</option>
+														    <option value="03">03</option>
+														    <option value="04">04</option>
+														    <option value="05">05</option>
+														    <option value="06">06</option>
+														    <option value="07">07</option>
+														    <option value="08">08</option>
+														    <option value="09">09</option>
+														    <option value="10">10</option>
+														    <option value="11">11</option>
+														    <option value="12">12</option>
+														    <option value="13">13</option>
+														    <option value="14">14</option>
+														    <option value="15">15</option>
+														    <option value="16">16</option>
+														    <option value="17">17</option>
+														    <option value="18">18</option>
+														    <option value="19">19</option>
+														    <option value="20">20</option>
+														    <option value="21">21</option>
+														    <option value="22">22</option>
+														    <option value="23">23</option>
+														</select>
+							:
+							<select onchange="document.fireEvent('entry-changed');" id="schedule-daily-time-minute">
+														    <option value="00" selected="">00</option>
+														    <option value="01">01</option>
+														    <option value="02">02</option>
+														    <option value="03">03</option>
+														    <option value="04">04</option>
+														    <option value="05">05</option>
+														    <option value="06">06</option>
+														    <option value="07">07</option>
+														    <option value="08">08</option>
+														    <option value="09">09</option>
+														    <option value="10">10</option>
+														    <option value="11">11</option>
+														    <option value="12">12</option>
+														    <option value="13">13</option>
+														    <option value="14">14</option>
+														    <option value="15">15</option>
+														    <option value="16">16</option>
+														    <option value="17">17</option>
+														    <option value="18">18</option>
+														    <option value="19">19</option>
+														    <option value="20">20</option>
+														    <option value="21">21</option>
+														    <option value="22">22</option>
+														    <option value="23">23</option>
+														    <option value="24">24</option>
+														    <option value="25">25</option>
+														    <option value="26">26</option>
+														    <option value="27">27</option>
+														    <option value="28">28</option>
+														    <option value="29">29</option>
+														    <option value="30">30</option>
+														    <option value="31">31</option>
+														    <option value="32">32</option>
+														    <option value="33">33</option>
+														    <option value="34">34</option>
+														    <option value="35">35</option>
+														    <option value="36">36</option>
+														    <option value="37">37</option>
+														    <option value="38">38</option>
+														    <option value="39">39</option>
+														    <option value="40">40</option>
+														    <option value="41">41</option>
+														    <option value="42">42</option>
+														    <option value="43">43</option>
+														    <option value="44">44</option>
+														    <option value="45">45</option>
+														    <option value="46">46</option>
+														    <option value="47">47</option>
+														    <option value="48">48</option>
+														    <option value="49">49</option>
+														    <option value="50">50</option>
+														    <option value="51">51</option>
+														    <option value="52">52</option>
+														    <option value="53">53</option>
+														    <option value="54">54</option>
+														    <option value="55">55</option>
+														    <option value="56">56</option>
+														    <option value="57">57</option>
+														    <option value="58">58</option>
+														    <option value="59">59</option>
+														</select>
+							</div>
+    					</div>
+    					<div id="schedule-weekly" class="scheduleWeekly" style="display: none;">
+    					Every		
+    					            <input onchange="document.fireEvent('entry-changed');" type="checkbox" id="schedule-weekly-sunday" name="scheduleWeeklyDay" value="0"><label for="schedule-weekly-sunday">&nbsp;Sunday</label>
+    								<input onchange="document.fireEvent('entry-changed');" type="checkbox" id="schedule-weekly-monday" name="scheduleWeeklyDay" value="1"><label for="schedule-weekly-monday">&nbsp;Monday</label>
+    								<input onchange="document.fireEvent('entry-changed');" type="checkbox" id="schedule-weekly-tuesday" name="scheduleWeeklyDay" value="2"><label for="schedule-weekly-tuesday">&nbsp;Tuesday</label>
+    								<input onchange="document.fireEvent('entry-changed');" type="checkbox" id="schedule-weekly-wednesday" name="scheduleWeeklyDay" value="3"><label for="schedule-weekly-wednesday">&nbsp;Wednesday</label>
+    								<input onchange="document.fireEvent('entry-changed');" type="checkbox" id="schedule-weekly-thursday" name="scheduleWeeklyDay" value="4"><label for="schedule-weekly-thursday">&nbsp;Thursday</label>
+    								<input onchange="document.fireEvent('entry-changed');" type="checkbox" id="schedule-weekly-friday" name="scheduleWeeklyDay" value="5"><label for="schedule-weekly-friday">&nbsp;Friday</label>
+    								<input onchange="document.fireEvent('entry-changed');" type="checkbox" id="schedule-weekly-saturday" name="scheduleWeeklyDay" value="6"><label for="schedule-weekly-saturday">&nbsp;Saturday</label>
+        					<div class="scheduleEveryMargin10">at        					    <select onchange="document.fireEvent('entry-changed');" id="schedule-weekly-time-hour">
+    							    							    <option value="00" selected="">00</option>
+    							    							    <option value="01">01</option>
+    							    							    <option value="02">02</option>
+    							    							    <option value="03">03</option>
+    							    							    <option value="04">04</option>
+    							    							    <option value="05">05</option>
+    							    							    <option value="06">06</option>
+    							    							    <option value="07">07</option>
+    							    							    <option value="08">08</option>
+    							    							    <option value="09">09</option>
+    							    							    <option value="10">10</option>
+    							    							    <option value="11">11</option>
+    							    							    <option value="12">12</option>
+    							    							    <option value="13">13</option>
+    							    							    <option value="14">14</option>
+    							    							    <option value="15">15</option>
+    							    							    <option value="16">16</option>
+    							    							    <option value="17">17</option>
+    							    							    <option value="18">18</option>
+    							    							    <option value="19">19</option>
+    							    							    <option value="20">20</option>
+    							    							    <option value="21">21</option>
+    							    							    <option value="22">22</option>
+    							    							    <option value="23">23</option>
+    							    							</select>
+    							:
+    							<select onchange="document.fireEvent('entry-changed');" id="schedule-weekly-time-minute">
+    							    							    <option value="00" selected="">00</option>
+    							    							    <option value="01">01</option>
+    							    							    <option value="02">02</option>
+    							    							    <option value="03">03</option>
+    							    							    <option value="04">04</option>
+    							    							    <option value="05">05</option>
+    							    							    <option value="06">06</option>
+    							    							    <option value="07">07</option>
+    							    							    <option value="08">08</option>
+    							    							    <option value="09">09</option>
+    							    							    <option value="10">10</option>
+    							    							    <option value="11">11</option>
+    							    							    <option value="12">12</option>
+    							    							    <option value="13">13</option>
+    							    							    <option value="14">14</option>
+    							    							    <option value="15">15</option>
+    							    							    <option value="16">16</option>
+    							    							    <option value="17">17</option>
+    							    							    <option value="18">18</option>
+    							    							    <option value="19">19</option>
+    							    							    <option value="20">20</option>
+    							    							    <option value="21">21</option>
+    							    							    <option value="22">22</option>
+    							    							    <option value="23">23</option>
+    							    							    <option value="24">24</option>
+    							    							    <option value="25">25</option>
+    							    							    <option value="26">26</option>
+    							    							    <option value="27">27</option>
+    							    							    <option value="28">28</option>
+    							    							    <option value="29">29</option>
+    							    							    <option value="30">30</option>
+    							    							    <option value="31">31</option>
+    							    							    <option value="32">32</option>
+    							    							    <option value="33">33</option>
+    							    							    <option value="34">34</option>
+    							    							    <option value="35">35</option>
+    							    							    <option value="36">36</option>
+    							    							    <option value="37">37</option>
+    							    							    <option value="38">38</option>
+    							    							    <option value="39">39</option>
+    							    							    <option value="40">40</option>
+    							    							    <option value="41">41</option>
+    							    							    <option value="42">42</option>
+    							    							    <option value="43">43</option>
+    							    							    <option value="44">44</option>
+    							    							    <option value="45">45</option>
+    							    							    <option value="46">46</option>
+    							    							    <option value="47">47</option>
+    							    							    <option value="48">48</option>
+    							    							    <option value="49">49</option>
+    							    							    <option value="50">50</option>
+    							    							    <option value="51">51</option>
+    							    							    <option value="52">52</option>
+    							    							    <option value="53">53</option>
+    							    							    <option value="54">54</option>
+    							    							    <option value="55">55</option>
+    							    							    <option value="56">56</option>
+    							    							    <option value="57">57</option>
+    							    							    <option value="58">58</option>
+    							    							    <option value="59">59</option>
+    							    							</select>
+        					</div>
+    					</div>
+    					<div id="schedule-monthly" class="scheduleMonthly" style="display: none;">
+    						<div style="margin-bottom:10px;">
+    						on the 
+    						       <select onchange="document.fireEvent('entry-changed');" id="schedule-monthly-day">
+    						           						       <option value="01">01</option>
+    						           						       <option value="02">02</option>
+    						           						       <option value="03">03</option>
+    						           						       <option value="04">04</option>
+    						           						       <option value="05">05</option>
+    						           						       <option value="06">06</option>
+    						           						       <option value="07">07</option>
+    						           						       <option value="08">08</option>
+    						           						       <option value="09">09</option>
+    						           						       <option value="10">10</option>
+    						           						       <option value="11">11</option>
+    						           						       <option value="12">12</option>
+    						           						       <option value="13">13</option>
+    						           						       <option value="14">14</option>
+    						           						       <option value="15">15</option>
+    						           						       <option value="16">16</option>
+    						           						       <option value="17">17</option>
+    						           						       <option value="18">18</option>
+    						           						       <option value="19">19</option>
+    						           						       <option value="20">20</option>
+    						           						       <option value="21">21</option>
+    						           						       <option value="22">22</option>
+    						           						       <option value="23">23</option>
+    						           						       <option value="24">24</option>
+    						           						       <option value="25">25</option>
+    						           						       <option value="26">26</option>
+    						           						       <option value="27">27</option>
+    						           						       <option value="28">28</option>
+    						           						       <option value="29">29</option>
+    						           						       <option value="30">30</option>
+    						           						       </select>
+    						of every month    						</div>
+    						<div class="scheduleEveryMargin10">
+    						at    						    <select onchange="document.fireEvent('entry-changed');" id="schedule-monthly-time-hour">
+    							    							    <option value="00" selected="">00</option>
+    							    							    <option value="01">01</option>
+    							    							    <option value="02">02</option>
+    							    							    <option value="03">03</option>
+    							    							    <option value="04">04</option>
+    							    							    <option value="05">05</option>
+    							    							    <option value="06">06</option>
+    							    							    <option value="07">07</option>
+    							    							    <option value="08">08</option>
+    							    							    <option value="09">09</option>
+    							    							    <option value="10">10</option>
+    							    							    <option value="11">11</option>
+    							    							    <option value="12">12</option>
+    							    							    <option value="13">13</option>
+    							    							    <option value="14">14</option>
+    							    							    <option value="15">15</option>
+    							    							    <option value="16">16</option>
+    							    							    <option value="17">17</option>
+    							    							    <option value="18">18</option>
+    							    							    <option value="19">19</option>
+    							    							    <option value="20">20</option>
+    							    							    <option value="21">21</option>
+    							    							    <option value="22">22</option>
+    							    							    <option value="23">23</option>
+    							    							</select>
+    							:
+    							<select onchange="document.fireEvent('entry-changed');" id="schedule-monthly-time-minute">
+    							    							    <option value="00" selected="">00</option>
+    							    							    <option value="01">01</option>
+    							    							    <option value="02">02</option>
+    							    							    <option value="03">03</option>
+    							    							    <option value="04">04</option>
+    							    							    <option value="05">05</option>
+    							    							    <option value="06">06</option>
+    							    							    <option value="07">07</option>
+    							    							    <option value="08">08</option>
+    							    							    <option value="09">09</option>
+    							    							    <option value="10">10</option>
+    							    							    <option value="11">11</option>
+    							    							    <option value="12">12</option>
+    							    							    <option value="13">13</option>
+    							    							    <option value="14">14</option>
+    							    							    <option value="15">15</option>
+    							    							    <option value="16">16</option>
+    							    							    <option value="17">17</option>
+    							    							    <option value="18">18</option>
+    							    							    <option value="19">19</option>
+    							    							    <option value="20">20</option>
+    							    							    <option value="21">21</option>
+    							    							    <option value="22">22</option>
+    							    							    <option value="23">23</option>
+    							    							    <option value="24">24</option>
+    							    							    <option value="25">25</option>
+    							    							    <option value="26">26</option>
+    							    							    <option value="27">27</option>
+    							    							    <option value="28">28</option>
+    							    							    <option value="29">29</option>
+    							    							    <option value="30">30</option>
+    							    							    <option value="31">31</option>
+    							    							    <option value="32">32</option>
+    							    							    <option value="33">33</option>
+    							    							    <option value="34">34</option>
+    							    							    <option value="35">35</option>
+    							    							    <option value="36">36</option>
+    							    							    <option value="37">37</option>
+    							    							    <option value="38">38</option>
+    							    							    <option value="39">39</option>
+    							    							    <option value="40">40</option>
+    							    							    <option value="41">41</option>
+    							    							    <option value="42">42</option>
+    							    							    <option value="43">43</option>
+    							    							    <option value="44">44</option>
+    							    							    <option value="45">45</option>
+    							    							    <option value="46">46</option>
+    							    							    <option value="47">47</option>
+    							    							    <option value="48">48</option>
+    							    							    <option value="49">49</option>
+    							    							    <option value="50">50</option>
+    							    							    <option value="51">51</option>
+    							    							    <option value="52">52</option>
+    							    							    <option value="53">53</option>
+    							    							    <option value="54">54</option>
+    							    							    <option value="55">55</option>
+    							    							    <option value="56">56</option>
+    							    							    <option value="57">57</option>
+    							    							    <option value="58">58</option>
+    							    							    <option value="59">59</option>
+    							    							</select>
+    						</div>
+    					</div>
+					</div>
+				</td>
+			</tr>
+		</tbody>
+	</table>     </div>

@@ -1,0 +1,108 @@
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script>
+$.noConflict();
+</script>
+
+<script type="">
+function cancel() {
+	window.location = '/ZendServer/Ci/';
+}
+
+var t = 0;
+function addStage() {
+	t++;
+	jQuery("#stages").append('<tr id="stname'+ t +'"><td>Name</td><td><input id="stnameinp'+ t +'" type="text" style="width: 600px;"></td></tr>');
+	jQuery("#stages").append('<tr id="stact'+ t +'"><td>Action</td><td><input id="stactinp'+ t +'" type="text" style="width: 600px;"></td></tr>');
+	jQuery("#stages").append('<tr id=""><td></td><td><button onClick="removeAction('+ t +');">Remove Action</button></td></tr>');
+}
+
+function save() {
+	var actArr = new Array();
+	var dataArr = {jobName : jQuery("#job-name").val(), jobDesc : jQuery("#job-desc").val(), jobEnabled : jQuery("#job-enabled").is(':checked')};
+	var t = 0;
+	jQuery('#stages tr').each(function(){
+		if (jQuery(this).attr('id').substring(0, 6) == 'stname') {
+			var actId = jQuery(this).attr('id').substring(6);
+			var actName = jQuery("#stnameinp" + actId).val();
+			var actAct = jQuery("#stactinp" + actId).val();
+			actArr[t] = {actName : actName, actAct : actAct};
+			t++;
+		}
+	});
+	console.log(actArr);
+	var params = {data : dataArr, act : actArr};
+	jQuery.ajax({
+		type: "POST",
+		url: "/ZendServer/Ci/save",
+		data: params
+	})
+	.done(function(msg) {
+		jQuery("#feeder").html(msg);
+		if (msg == 'New job has been created') {
+			setTimeout(function(){
+				window.location = '/ZendServer/Ci/';
+			}, 2000);
+		}
+		
+	});	
+}
+
+function removeAction(actionId) {
+	jQuery('#stages tr').each(function(){
+		if (jQuery(this).attr('id').substring(0, 6) == 'stname') {
+			var rowActionId = jQuery(this).attr('id').substring(6);
+			if (rowActionId == actionId) {
+				console.log(jQuery(this).attr('id'));
+				jQuery(this).next().next().remove();
+				jQuery(this).next().remove();
+				jQuery(this).remove();
+			}
+		}
+	});
+}
+</script>
+<div style="width: 700px;">
+	<table class="zgrid">
+		<tbody>
+			<tr>
+				<td>
+					Job Name
+				</td>
+				<td>
+					<input type="text" id="job-name">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					Job Description
+				</td>
+				<td>
+					<input type="text" id="job-desc" style="width: 600px;">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					Enabled
+				</td>
+				<td>
+					<input type="checkbox" id="job-enabled" checked>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<span style="font-weight: bold;">Job Actions</span>
+				</td>
+				<td>
+					<table id="stages">
+					</table>
+					<button onClick="addStage();">Add Action</button>
+				</td>
+			</tr>
+		</tbody>
+	</table>
+</div>
+<br>
+<br>
+<br>
+<button onClick="save();">Save</button> <button onClick="cancel();">Back</button>
+<div id="feeder"></div>

@@ -1,0 +1,10 @@
+<?php
+if ($this->err != '') {
+	echo $err;
+} else {
+	?>
+	<script type="text/javascript">
+	window.location = "/ZendServer/Ci/project?jobId=<?php echo $this->projectId; ?>";
+	</script>	
+	<?php
+}

@@ -1,0 +1,21 @@
+1. Copy files or create symlink into (sudo ln -s /vagrant/Ci /usr/local/zend/gui/vendor/Ci) /usr/local/zend/gui/vendor/Ci
+2. Add new module to the modules modules array in /usr/local/zend/gui/config/application.config.php
+3. Add to the following entry into the 'default' array in /usr/local/zend/gui/config/autoload/navigation.global.config.php
+'ci' => array(
+				'label' => 'CI/CD',
+				'controller' => 'Ci',
+				'route' => 'default',
+				'class' => 'glyphicons white cargo no-menu-arrow',
+				'pages' => array(
+		)
+),
+4. Execute (sudo sqlite3 /usr/local/zend/var/db/gui.db) the following queries:
+INSERT OR IGNORE INTO GUI_ACL_RESOURCES VALUES(NULL,'route:Ci');
+INSERT OR IGNORE INTO GUI_ACL_PRIVILEGES VALUES(3, last_insert_rowid(), '');
+INSERT OR IGNORE INTO GUI_ACL_RESOURCES VALUES(NULL,'route:CiWebAPI');
+INSERT OR IGNORE INTO GUI_ACL_PRIVILEGES VALUES(3, last_insert_rowid(), '');
+5. sudo cp /usr/local/zend/gui/vendor/Ci/var/scripts/run-ci-job.php /var/www/
+6. Update admin API key in /usr/local/zend/gui/vendor/Ci/apikey
+7. If you want to run docker you have to be su - so you will have to add the follow line into the visudo (sudo visudo) file:
+zend ALL = NOPASSWD: /usr/bin/docker
+8. Add symlink to Chat.js ln -s /usr/local/zend/gui/vendor/Ci/var/js/chartjs /usr/local/zend/gui/public/js/chartjs

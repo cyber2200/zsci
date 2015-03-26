@@ -1,0 +1,2 @@
+#!/bin/sh
+/usr/local/zend/bin/php /usr/local/zend/gui/vendor/Ci/var/ci-scripts/git-hook.php

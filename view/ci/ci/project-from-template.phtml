@@ -1,0 +1,106 @@
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script>
+$.noConflict();
+</script>
+<script type="text/javascript">
+var app = '';
+var platform = '';
+function createProject() {
+	if (platform == '') {
+		jQuery("#feeder").html("Please select a platform");
+	} else if(jQuery("#projectName").val() == '') {
+		jQuery("#feeder").html("Please select a project name");
+	} else {
+		window.location = "/ZendServer/Ci/createFromTemplate?platform="+ platform +"&projectName=" + jQuery("#projectName").val() + "&app=" + app;
+	}
+}
+
+function selectTemp(provider) {
+	platform = provider;
+	var divId = provider + '-div';
+	jQuery("#platforms").find('div').each(function(){
+		jQuery(this).css('border', '0px solid gray');
+	});
+	jQuery("#" + divId).css('border', '1px solid #E6E6E6');
+}
+
+function selectApp(app) {
+	app = app;
+	var divId = app + '-div';
+	jQuery("#apps").find('div').each(function(){
+		jQuery(this).css('border', '0px solid gray');
+	});
+	jQuery("#" + divId).css('border', '1px solid #E6E6E6');
+}
+</script>
+
+<style>
+.provider-img {
+	width: 140px;
+	cursor: pointer;
+}
+
+.img-div {
+	padding: 30px;
+	display: inline-block;
+}
+</style>
+<div style="padding: 40px; text-align: center; font-size: 20px;">
+	Project Name: <input id="projectName" style="font-size: 20px;" type="text">
+</div>
+<div style="text-align: center; font-size: 30px;">
+Please select the platform:
+</div>
+<div style="text-align: center; padding: 0px 200px 0px 200px;" id="platforms">
+	<div id="aws-div" class="img-div">
+		<img onClick="selectTemp('aws');" class="provider-img" src="/ZendServer/ci-assets/aws1.png">		
+	</div>
+	<div id="azure-div" class="img-div">
+		<img onClick="selectTemp('azure');" class="provider-img" src="/ZendServer/ci-assets/download (1).png">		
+	</div>
+	<div id="puppet-div" class="img-div">
+		<img onClick="selectTemp('puppet');" class="provider-img" src="/ZendServer/ci-assets/download.png">		
+	</div>
+	<div id="rackspace-div" class="img-div">
+		<img onClick="selectTemp('rackspace');" class="provider-img" src="/ZendServer/ci-assets/rackspace_logo_2.jpg">		
+	</div>
+	<div id="digitalocean-div" class="img-div">
+		<img onClick="selectTemp('digitalocean');" class="provider-img" src="/ZendServer/ci-assets/vps-digital-ocean.png">	
+	</div>
+	<div id="chef-div" class="img-div">
+		<img onClick="selectTemp('chef');" class="provider-img" src="/ZendServer/ci-assets/OC_Chef_Logo.png">	
+	</div>
+	<div id="docker-div" class="img-div">
+		<img onClick="selectTemp('docker');" class="provider-img" src="/ZendServer/ci-assets/docker.png">	
+	</div>
+</div>
+<div style="text-align: center; font-size: 30px;padding-top: 30px;">
+Add application code (not required):
+</div>
+<div style="text-align: center; padding: 0px 0px 0px 0px;" id="apps">
+	<div id="drupal-div" class="img-div">
+		<img onClick="selectApp('drupal');" class="provider-img" src="/ZendServer/ci-assets/drupal.jpg">		
+	</div>
+	<div id="joomla-div" class="img-div">
+		<img onClick="selectApp('joomla');" class="provider-img" src="/ZendServer/ci-assets/joomla_0.png">		
+	</div>
+	<div id="symfony-div" class="img-div">
+		<img onClick="selectApp('symfony');" class="provider-img" src="/ZendServer/ci-assets/symfony_black_01.png">		
+	</div>
+	<div id="wordpress-div" class="img-div">
+		<img onClick="selectApp('wordpress');" class="provider-img" src="/ZendServer/ci-assets/wp.png">		
+	</div>
+	<div id="zf1-div" class="img-div">
+		<img onClick="selectApp('zf1');" class="provider-img" src="/ZendServer/ci-assets/zf1.png">		
+	</div>
+	<div id="zf2-div" class="img-div">
+		<img onClick="selectApp('zf2');" class="provider-img" src="/ZendServer/ci-assets/ZF2-Logo.png">		
+	</div>
+</div>
+<div style="padding: 0px; text-align: center; font-size: 30px;">
+	<a href="javascript:void(0);" onClick="createProject();">Create New Project</a>
+</div>
+<div id="feeder" style="padding: 40px; text-align: center; font-size: 30px;"></div>
+<div style="padding: 120px; text-align: center; font-size: 30px;">
+	<a href="/ZendServer/Ci">Back</a>
+</div>

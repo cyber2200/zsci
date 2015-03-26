@@ -1,0 +1,104 @@
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script>
+$.noConflict();
+</script>
+<script type="text/javascript">
+function release() {
+	var res = confirm("Are you sure that you want to release?");
+	if (res) {
+		jQuery("#feeder").html("Processing...");
+		var d = new Date();
+		var params = '';
+		params += 'jobId=<?php echo $this->ret['jobid'];?>';
+		params += '&release-manager=' + jQuery("#release-manager").val();
+		params += '&release-purpose=' + jQuery("#release-purpose").val();
+		params += '&version=' + jQuery("#version").val();
+		params += '&datetimestr=' + d.toString();
+		jQuery.ajax({
+			type: "POST",
+			url: "/ZendServer/Ci/execute-release",
+			data: params
+		})
+		.done(function(msg) {
+			jQuery("#feeder").html('<pre>' + msg + '</pre>');
+		});
+	}
+}
+
+var rawOutput = {};
+
+function showReleases() {
+	jQuery("#feeder").html("Loading...");
+	var d = new Date();
+	var params = '';
+	params += 'jobId=<?php echo $this->ret['jobid'];?>';
+	jQuery.ajax({
+		type: "POST",
+		url: "/ZendServer/Ci/get-releases",
+		data: params
+	})
+	.done(function(data) {
+		var t = '<table>';
+		t += '<tr style="text-decoration: underline;">';
+		t += '<td>Release ID</td>';
+		t += '<td>Release Manager</td>';
+		t += '<td>Release Purpose</td>';
+		t += '<td>Version</td>';
+		t += '<td>Time</td>';
+		t += '<td></td>';
+		t += '</tr>';
+		for (var i = 0; i < data.length; i++) {
+			rawOutput[data[i].releaseid] = data[i].rawoutput;
+			t += '<tr>';
+			t += '<td>'+ data[i].releaseid +'</td>';
+			t += '<td>'+ data[i].releasemanager +'</td>';
+			t += '<td>'+ data[i].releasepurpose +'</td>';
+			t += '<td>'+ data[i].version +'</td>';
+			t += '<td>'+ data[i].datetimestr +'</td>';
+			t += '<td><a onclick="showOutput('+ data[i].releaseid +');" href="javascript:boid(0);">Show Output</a></td>';
+			t += '</tr>';
+		}
+		t += '</table>';
+		jQuery("#feeder").html(t);
+	});
+}
+
+function cancel() {
+	window.location = '/ZendServer/Ci/project?jobId=<?php echo $this->ret['jobid'];?>';
+}
+
+function showOutput(releaseId) {
+	jQuery("#feeder").html('<a onClick="showReleases();" href="javascript:void(0);">Back</a><br><br><pre>' + rawOutput[releaseId] + '</pre>');
+}
+</script>
+<br><br>
+<table>
+	<tr>
+		<td>Release of <span style="font-weight: bold;"></td>
+		<td><?php echo $this->ret['jobname'];?></span></td>
+	</tr>
+	<tr>
+		<td>Release script:</td>
+		<td><span style="font-weight: bold;"><?php echo $this->ret['releasescript'];?></span></td>
+	</tr>
+	<tr>
+		<td>Name of release manager:</td>
+		<td><input type="text" id="release-manager"></td>
+	</tr>
+	<tr>
+		<td>Purpose of release:</td>
+		<td><input type="text" id="release-purpose"></td>
+	</tr>
+	<tr>
+		<td>Version:</td>
+		<td><input type="text" id="version"></td>
+	</tr>
+</table>
+<br><br>
+<div style="display: inline-block;">
+	<button onClick="release();" style="background-color: red; color :white;">Release</button>
+	<button onClick="showReleases();">Show Previous Releases</button>
+	<button onClick="cancel();">Back</button>
+</div>
+<br><br>
+<div id="feeder"></div>

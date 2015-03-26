@@ -1,0 +1,467 @@
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script>
+$.noConflict();
+</script>
+
+<script type="">
+function cancel() {
+	window.location = '/ZendServer/Ci/';
+}
+
+var t = 0;
+function addStage() {
+	t++;
+	jQuery("#stages").append('<tr id="stname'+ t +'"><td>Name</td><td><input id="stnameinp'+ t +'" type="text" style="width: 600px;"></td></tr>');
+	jQuery("#stages").append('<tr id="stact'+ t +'"><td>Action</td><td><input id="stactinp'+ t +'" type="text" style="width: 600px;"></td></tr>');
+	jQuery("#stages").append('<tr id="actions'+ t +'"></tr>');
+	addButtons();
+}
+
+function save() {
+	var err = 0;
+	jQuery('#stages tr').each(function(){
+		if (jQuery(this).attr('id').substring(0, 6) == 'stname') {
+			var rowId = jQuery(this).attr('id').substring(6);		
+			console.log(jQuery("#stnameinp" + rowId).val() + ' ' + jQuery("#stactinp" + rowId).val());
+			if (jQuery("#stnameinp" + rowId).val() == '' || jQuery("#stactinp" + rowId).val() == '') {
+				err++;
+			}
+		}
+	});
+	if (err != 0) {
+		jQuery("#feeder").html("Every action should have a name and an action command");	
+		return 0;
+	}
+	var actArr = new Array();
+	var dataArr = {jobId : jQuery("#job-id").val(), jobName : jQuery("#job-name").val(), jobDesc : jQuery("#job-desc").val(), jobEnabled : jQuery("#job-enabled").is(':checked'), releasescript : jQuery("#releasescript").val(), repo : jQuery("#repo").val(), jobruleid : jQuery("#jobruleid").val()};
+	var t = 0;
+	document.fireEvent('toast', {'message': 'Saving...'});
+	jQuery('#stages tr').each(function(){
+		if (jQuery(this).attr('id').substring(0, 6) == 'stname') {
+			var actId = jQuery(this).attr('id').substring(6);
+			var actName = jQuery("#stnameinp" + actId).val();
+			var actAct = jQuery("#stactinp" + actId).val();
+			actArr[t] = {actName : actName, actAct : actAct};
+			t++;
+		}
+	});
+	var params = {data : dataArr, act : actArr};
+	jQuery.ajax({
+		type: "POST",
+		url: "/ZendServer/Ci/save",
+		data: params
+	})
+	.done(function(msg) {
+		document.fireEvent('toast', {'message': msg});
+		if (msg.indexOf('New project has been created') != -1) {
+			setTimeout(function(){
+				var jT = msg.indexOf(':');
+				var jId = msg.substr(jT + 2);
+				window.location = '/ZendServer/Ci/project?jobId=' + jId;
+			}, 500);
+		}
+	});
+}
+
+function run(jobId) {
+	window.location = '/ZendServer/Ci/run?jobId=' + jobId;
+}
+
+function removeAction(actionId) {
+	t--;
+	jQuery('#stages tr').each(function(){
+		if (jQuery(this).attr('id').substring(0, 6) == 'stname') {
+			var rowActionId = jQuery(this).attr('id').substring(6);
+			if (rowActionId == actionId) {
+				jQuery(this).next().next().remove();
+				jQuery(this).next().remove();
+				jQuery(this).remove();
+			}
+		}
+	});
+	var stagesArr = getArray();
+	buildStagesTab(stagesArr);
+	addButtons();
+}
+
+function forceRun() {
+	var ruleId = '<?php echo $this->data['jobruleid']; ?>';
+    var request = new Request.WebAPI({
+        url: '/ZendServer/Api/jobqueueRunNowRule',
+        data: {ruleId: ruleId}, 
+        onSuccess: function(response) {
+            document.fireEvent('toastNotification', {'message': 'The recurring job was scheduled for immediate execution'});
+			//console.log(response);
+			window.location = '/ZendServer/JobQueue/';
+        },
+        onFailure: function(response) {
+            document.fireEvent('toastAlert', {'message': 'Failed to execute the recurring job'});
+        }
+    }).post();
+}
+
+function release(jobId) {
+	window.location = '/ZendServer/Ci/release?jobId=' + jobId;
+}
+
+function getArray() {
+	var stagesArr = [];
+	var i = 0;
+	jQuery('#stages tr').each(function(){
+		if (jQuery(this).attr('id').substring(0, 6) == 'stname') {
+			var rowActionId = jQuery(this).attr('id').substring(6);
+			i++;
+			stagesArr[i] = {name : jQuery("#stnameinp" + rowActionId).val(), action : jQuery("#stactinp" + rowActionId).val()};
+		}
+	});
+	return stagesArr;
+}
+	
+function buildStagesTab(stagesArr) {
+	jQuery("#stages").html('');
+	for (var i = 1; i < stagesArr.length; i++) {
+		jQuery("#stages").append('<tr id="stname'+ i +'"><td>Name</td><td><input id="stnameinp'+ i +'" type="text" value="' + stagesArr[i].name + '" style="width: 600px;"></td></tr>');
+		jQuery("#stages").append('<tr id="stact'+ i +'"><td>Action</td><td><input id="stactinp'+ i +'" type="text" value="' + stagesArr[i].action + '" style="width: 600px;"></td></tr>');
+		var actionsTrs = '<tr id="actions'+ i +'"></tr>';
+		jQuery("#stages").append(actionsTrs);
+		addButtons();
+	}
+}
+
+function moveUp(t) {
+	var stagesArr = getArray();
+	for (var i = 1; i < stagesArr.length; i++) {
+		if (t == i) {
+			var tmp = stagesArr[i];
+			stagesArr[i] = stagesArr[i-1];
+			stagesArr[i-1] = tmp;
+		}
+	}
+	buildStagesTab(stagesArr);
+}
+
+function moveDown(t) {
+	var stagesArr = getArray();
+	for (var i = 1; i < stagesArr.length; i++) {
+		if (t == i) {
+			var tmp = stagesArr[i];
+			stagesArr[i] = stagesArr[i+1];
+			stagesArr[i+1] = tmp;
+		}
+	}
+	buildStagesTab(stagesArr);
+}
+
+function addButtons() {
+	var rowCount = 0;
+	jQuery('#stages tr').each(function(){
+		rowCount++;
+	});
+	var sumRows = rowCount / 3;
+	t = sumRows;
+	
+	var i = 0;
+	jQuery('#stages tr').each(function(){
+		i++;
+		if (jQuery(this).attr('id').substring(0, 7) == 'actions') {
+			var id = jQuery(this).attr('id').substring(7);
+			var actStr = '<td></td><td>';
+			actStr += ' <button onClick="removeAction('+ id +');">Remove Action</button> ';			
+			if (! (rowCount == 3 && i == 3)) {
+				if (i == 3) {
+					actStr += ' <button onClick="moveDown('+ id +');">Move Down</button> ';	
+				}
+				if (i == rowCount) {
+					actStr += ' <button onClick="moveUp('+ id +');">Move Up</button> ';	
+				}
+				if (i != 3 && i != rowCount) {
+					actStr += ' <button onClick="moveDown('+ id +');">Move Down</button> ';	
+					actStr += ' <button onClick="moveUp('+ id +');">Move Up</button> ';	
+				}
+			}
+			actStr += '</td>';
+			jQuery(this).html(actStr);
+		}
+	});
+}
+</script>
+<div style="width: 700px; padding-bottom: 20px;">
+<br>
+<?php
+if (! $this->new) {
+	?>
+	<button onClick="forceRun();">Force Run</button> 
+	<button onClick="window.location='/ZendServer/Ci/schedule?jobId=<?php echo $this->data['jobid']; ?>';">Create Job Rule</button>
+	<?php
+}
+?>
+<button onClick="cancel();">Back</button>
+<?php
+if (! $this->new) {
+	?>
+	<div style="display: inline-block; padding-left: 70px;"><button onClick="release(<?php echo $this->data['jobid']; ?>);" style="background-color: red; color :white;">Release Management</button></div>
+	<?php
+}
+?>
+</div>
+<?php
+$colors = array('Blue', 'Brown' ,'Cyan', 'Gray', 'Green', 'AliceBlue','AntiqueWhite','Aqua','Aquamarine','Azure','Beige ','Bisque', 'Black ','BlanchedAlmond ','BlueViolet ' ,'BurlyWood ','CadetBlue ','Chartreuse ','Chocolate ','Coral ','CornflowerBlue ','Cornsilk ','Crimson ','DarkBlue ','DarkCyan ','DarkGoldenRod ','DarkGray ','DarkGreen ','DarkKhaki ','DarkMagenta ','DarkOliveGreen ','DarkOrange ','DarkOrchid ','DarkRed ','DarkSalmon ','DarkSeaGreen ','DarkSlateBlue ','DarkSlateGray ','DarkTurquoise ','DarkViolet ','DeepPink ','DeepSkyBlue ','DimGray ','DodgerBlue ','FireBrick ','FloralWhite ','ForestGreen ','Fuchsia ','Gainsboro ','GhostWhite ','Gold ','GoldenRod ','GreenYellow ','HoneyDew ','HotPink ','IndianRed ','Indigo ','Ivory ','Khaki ','Lavender ','LavenderBlush ','LawnGreen ','LemonChiffon ','LightBlue ','LightCoral ','LightCyan ','LightGoldenRodYellow ','LightGray ','LightGreen ','LightPink ','LightSalmon ','LightSeaGreen ','LightSkyBlue ','LightSlateGray ','LightSteelBlue ','LightYellow ','Lime ','LimeGreen ','Linen ','Magenta ','Maroon ','MediumAquaMarine ','MediumBlue ','MediumOrchid ','MediumPurple ','MediumSeaGreen ','MediumSlateBlue ','MediumSpringGreen ','MediumTurquoise ','MediumVioletRed ','MidnightBlue ','MintCream ','MistyRose ','Moccasin ','NavajoWhite ','Navy ','OldLace ','Olive ','OliveDrab ','Orange ','OrangeRed ','Orchid ','PaleGoldenRod ','PaleGreen ','PaleTurquoise ','PaleVioletRed ','PapayaWhip ','PeachPuff ','Peru ','Pink ','Plum ','PowderBlue Mix','Purple ','Red ','RosyBrown ','RoyalBlue ','SaddleBrown ','Salmon ','SandyBrown ','SeaGreen ','SeaShell ','Sienna ','Silver ','SkyBlue ','SlateBlue ','SlateGray ','Snow ','SpringGreen ','SteelBlue ','Tan ','Teal ','Thistle ','Tomato ','Turquoise ','Violet ','Wheat ','White ','WhiteSmoke ','Yellow ','YellowGreen');
+if (count($this->actionsStats) > 1) {
+	?>
+	<script src="/ZendServer/js/chartjs/Chart.js"></script>
+	<div style="text-align: center; padding-top: 10px; display: inline-block;">
+		<canvas id="myChart" width="400" height="400"></canvas>
+	</div>
+	<script type="text/javascript">
+	var ctx = document.getElementById("myChart").getContext("2d");
+	var data = [
+		<?php
+		$i = 0;
+		foreach ($this->actionsStats as $action) {
+			?>
+			{
+				value: <?php echo $action['time']; ?>,
+				color: "<?php echo $colors[$i]; ?>",
+				highlight: "<?php echo $colors[$i]; ?>",
+				label: "<?php echo $action['name']; ?>"
+			},		
+			<?php
+			$i++;
+		}
+		?>
+	]
+
+	var options = {
+		//Boolean - Whether we should show a stroke on each segment
+		segmentShowStroke : true,
+
+		//String - The colour of each segment stroke
+		segmentStrokeColor : "#fff",
+
+		//Number - The width of each segment stroke
+		segmentStrokeWidth : 2,
+
+		//Number - The percentage of the chart that we cut out of the middle
+		percentageInnerCutout : 0, // This is 0 for Pie charts
+
+		//Number - Amount of animation steps
+		animationSteps : 100,
+
+		//String - Animation easing effect
+		animationEasing : "easeOutBounce",
+
+		//Boolean - Whether we animate the rotation of the Doughnut
+		animateRotate : true,
+
+		//Boolean - Whether we animate scaling the Doughnut from the centre
+		animateScale : false,
+
+		//String - A legend template
+		legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<segments.length; i++){%><li><span style=\"background-color:<%=segments[i].fillColor%>\"></span><%if(segments[i].label){%><%=segments[i].label%><%}%></li><%}%></ul>"
+
+	}
+	var myPieChart = new Chart(ctx).Pie(data,options);
+	</script>
+	<?php
+}
+
+if (count($this->buildStats) > 1) {
+	?>
+	<script src="/ZendServer/js/chartjs/Chart.js"></script>
+	<div style="text-align: center; padding-top: 10px; display: inline-block;">
+		<canvas id="myChart2" width="400" height="400"></canvas>
+	</div>
+	<script type="text/javascript">
+	var ctx2 = document.getElementById("myChart2").getContext("2d");
+	var data2 = {
+		<?php
+		$str = '';
+		foreach ($this->buildStats as $build) {
+			$str .= '"' . $build['buildDate'] . '", ';
+		}
+		?>
+		labels: [<?php echo $str; ?>],
+		datasets: [
+			{
+				label: "My First dataset",
+				fillColor: "rgba(220,220,220,0.5)",
+				strokeColor: "rgba(220,220,220,0.8)",
+				highlightFill: "rgba(220,220,220,0.75)",
+				highlightStroke: "rgba(220,220,220,1)",
+				<?php
+				$str = '';
+				foreach ($this->buildStats as $build) {
+					$str .= '"' . $build['buildTime'] . '", ';
+				}
+				?>
+				data: [<?php echo $str; ?>]
+			},
+		]
+	};
+	
+	var options2 = {
+    //Boolean - Whether the scale should start at zero, or an order of magnitude down from the lowest value
+    scaleBeginAtZero : true,
+
+    //Boolean - Whether grid lines are shown across the chart
+    scaleShowGridLines : true,
+
+    //String - Colour of the grid lines
+    scaleGridLineColor : "rgba(0,0,0,.05)",
+
+    //Number - Width of the grid lines
+    scaleGridLineWidth : 1,
+
+    //Boolean - If there is a stroke on each bar
+    barShowStroke : true,
+
+    //Number - Pixel width of the bar stroke
+    barStrokeWidth : 2,
+
+    //Number - Spacing between each of the X value sets
+    barValueSpacing : 5,
+
+    //Number - Spacing between data sets within X values
+    barDatasetSpacing : 1,
+
+    //String - A legend template
+    legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<datasets.length; i++){%><li><span style=\"background-color:<%=datasets[i].lineColor%>\"></span><%if(datasets[i].label){%><%=datasets[i].label%><%}%></li><%}%></ul>"
+
+	}
+	var myBarChart = new Chart(ctx2).Bar(data2, options2);
+	</script>
+	<?php
+}
+?>
+<div id="feeder"></div>
+<br />
+<div style="width: 700px;">
+<br><br>
+	<input type="hidden" id="job-id" name="job-id" value="<?php echo $this->data['jobid']; ?>">
+	<table class="zgrid">
+		<tbody>
+			<tr>
+				<td>
+					Project Name
+				</td>
+				<td>
+					<input type="text" id="job-name" value="<?php echo $this->data['jobname']; ?>" style="width: 600px;">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					Project Description
+				</td>
+				<td>
+					<input type="text" id="job-desc" value="<?php echo $this->data['jobdesc']; ?>" style="width: 600px;">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					Enabled
+				</td>
+				<td>
+					<?php
+					if ($this->data['enabled'] == '1') {
+						?>
+						<input type="checkbox" id="job-enabled" checked>
+						<?php
+					} else {
+						?>
+						<input type="checkbox" id="job-enabled">
+						<?php					
+					}
+					?>
+					
+				</td>
+			</tr>
+			<tr>
+				<td>
+					Release Script
+				</td>
+				<td>
+					<input type="text" id="releasescript" value="<?php echo $this->data['releasescript']; ?>" style="width: 600px;">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					Project Repository
+				</td>
+				<td>
+					<input type="text" id="repo" value="<?php echo $this->data['repo']; ?>" style="width: 600px;">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					Job Rule ID
+				</td>
+				<td>
+					<input type="text" id="jobruleid" value="<?php echo $this->data['jobruleid']; ?>" style="width: 600px;">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<span style="font-weight: bold;">Project Actions</span>
+				</td>
+				<td>
+					<table id="stages">
+					<?php
+					if (! $this->new) {
+						$t = 0;
+						$this->actions->execute();
+						$rows = $this->actions->fetchAll();
+						$rowsCount = count($rows);
+						foreach ($rows as $action) {
+							$t++;
+							?>
+							<tr id="stname<?php echo $t;?>"><td>Name</td><td><input id="stnameinp<?php echo $t;?>" type="text" value="<?php echo $action['actionname'];?>" style="width: 600px;"></td></tr>
+							<tr id="stact<?php echo $t;?>"><td>Action</td><td><input id="stactinp<?php echo $t;?>" type="text" value="<?php echo $action['action'];?>" style="width: 600px;"></td></tr>
+							<tr id="actions<?php echo $t;?>"><td></td>
+								<td>
+									<button onClick="removeAction(<?php echo $t;?>);">Remove Action</button>
+									<?php
+									if ($t > 1) {
+										?>
+										<button onClick="moveUp(<?php echo $t;?>);">Move Up</button>	
+										<?php
+									} 
+									
+									if ($t != $rowsCount) {
+										?>
+										<button onClick="moveDown(<?php echo $t;?>);">Move Down</button>	
+										<?php
+									}
+									?>
+								</td>
+							</tr>
+							<?php
+						}
+					}
+					?>
+					</table>
+					<?php
+					if ($t != '') {
+						?>
+						<script type="text/javascript">
+						t = <?php echo $t; ?>;
+						</script>						
+						<?php
+					}
+					?>
+					<button onClick="addStage();">Add Action</button>
+				</td>
+			</tr>
+		</tbody>
+	</table>
+</div>
+<br>
+<button onClick="save();">Save</button> 
+<br>
+<br>
+<?php
+if (! $this->new) {
+	?>
+	<!-- Trigger: <input id="trigger-url" type="text" value="http://<?php echo $_SERVER['SERVER_NAME'];?>/run-ci-job.php?jobId=<?php echo $this->data['jobid']; ?>" disabled style="width: 600px;">(copy this and click on "Create Job Rule")<button onClick="window.location='/ZendServer/RecurringJobs/create';">Create Job Rule</button> <br /><br /> -->
+	<?php
+}
+?>

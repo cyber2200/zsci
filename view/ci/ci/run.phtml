@@ -1,0 +1,27 @@
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script>
+$.noConflict();
+</script>
+<?php
+$tArr = array();
+foreach ($this->actionsResults as $action) {
+	$tArr[] = $action;
+}
+?>
+<script type="text/javascript">
+var actions = <?php echo json_encode($tArr); ?>;
+var i = 0;
+jQuery(actions).each(function(){
+	jQuery.ajax({
+		type: "GET",
+		url: "/ZendServer/Ci/run-action",
+		data: 'actionId=' + this.actionid
+	})
+	.done(function(msg) {
+		jQuery("#feeder").html(jQuery("#feeder").html() + '<pre>' + msg + '</pre><br>');
+	});
+});
+</script>
+
+<div id="feeder"></div>
+<button onClick="window.location = '/ZendServer/Ci/show?jobId=<?php echo $tArr[0]['jobid']; ?>';">Back</button>
